@@ -59,7 +59,7 @@ int main() {
     cudaEventCreate(&stopEvent);
     float elapsed_time;
 
-
+    
     sf::Image image;
     image.create(WIDTH, HEIGHT, pixels);
     sf::Texture texture;
@@ -69,6 +69,8 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "SFML works!");
     bool flag = false;
     double var_scale = SCALE;
+
+    sf::Uint8* updateBuffer;
     while (window.isOpen())
     {
         sf::Event event;
@@ -86,7 +88,7 @@ int main() {
         {
             for (int j = 0; j < WIDTH; j++)
             {
-                points[i * WIDTH + j].y += 30 * var_scale;
+                points[i * WIDTH + j].y += 25 * var_scale;
             }
         }
         // Zoom In
@@ -102,7 +104,8 @@ int main() {
 
         cudaError_t status = convergenceCuda(&pixels, &points);
         image.create(WIDTH, HEIGHT, pixels);
-        texture.loadFromImage(image);
+        //texture.loadFromImage(image);
+        texture.update(image);
         sprite.setTexture(texture);
 
 

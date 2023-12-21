@@ -228,7 +228,7 @@ cudaError_t convergenceCuda(sf::Uint8** colors, Coordinates **points)
     
     // Number of threads per block
     //std::cout << "Memory copied from host to device" << std::endl;
-    dim3 threadsPerBlock(16, 16);
+    dim3 threadsPerBlock(32, 32);
     dim3 numberOfBlocks(WIDTH / threadsPerBlock.x, HEIGHT / threadsPerBlock.y);
 
     checkConverergence <<<numberOfBlocks, threadsPerBlock >>> (*colors, *points);

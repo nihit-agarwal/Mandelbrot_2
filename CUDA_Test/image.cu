@@ -5,16 +5,18 @@
 #include <fstream>
 #include <SFML/Graphics.hpp>
 #include <thrust/complex.h>
-cudaError_t convergenceCuda(dim3** color, Coordinates** points);
+cudaError_t convergenceCuda(sf::Uint8** colors, Coordinates** points);
+cudaError_t memoryAllocateCuda(sf::Uint8** colors, Coordinates** points);
+cudaError_t memoryFreeCuda(sf::Uint8** colors, Coordinates** points);
 
-__global__ void checkConverergence(dim3** color, Coordinates** points)
+__global__ void checkConverergence(sf::Uint8* colors, Coordinates* points)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i < HEIGHT && j < WIDTH)
     {
-        double x = points[i][j].x;
-        double y = points[i][j].y;
+        double x = points[i * WIDTH + j].x;
+        double y = points[i * WIDTH + j].y;
         thrust::complex<double> num = thrust::complex<double>(x, y);
         thrust::complex<double> curr(0,0);
         int iteration = 0;
@@ -25,11 +27,17 @@ __global__ void checkConverergence(dim3** color, Coordinates** points)
         }
         if (iteration == ITERATIONS)
         {
-            color[i][j] = dim3(255, 0, 0);
+            colors[4* (i * WIDTH + j)] = 0; // Blue
+            colors[4 * (i * WIDTH + j) + 1] = 255; // Green
+            colors[4 * (i * WIDTH + j) + 2] = 0; // Red
+            colors[4 * (i * WIDTH + j) + 3] = 255; // Alpha
         }
         else
         {
-            color[i][j] = dim3(0, 0, 0);
+            colors[4 * (i * WIDTH + j)] = 0; // Blue
+            colors[4 * (i * WIDTH + j) + 1] = 0; // Green
+            colors[4 * (i * WIDTH + j) + 2] = 0; // Red
+            colors[4 * (i * WIDTH + j) + 3] = 255; // Alpha
         }
     }
 
@@ -37,43 +45,21 @@ __global__ void checkConverergence(dim3** color, Coordinates** points)
 
 int main() {
 	std::cout << "Hello cuda !" << std::endl;
-	
-    dim3** colors = new dim3*[HEIGHT];
-    Coordinates** points = new Coordinates*[HEIGHT];
-
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        colors[i] = new dim3[WIDTH];
-        points[i] = new Coordinates[WIDTH];
-    }
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        for (int j = 0; j < WIDTH; j++)
-        {
-            points[i][j].x = (j - WIDTH/2) * SCALE;
-            points[i][j].y = (HEIGHT/2 - i) * SCALE;
-        }
-    }
-    
-    std::cout << "Coordinates computation completed" << std::endl;
-    convergenceCuda(colors, points);
-
-
     const unsigned numPixels = HEIGHT * WIDTH;
-    sf::Uint8* pixels = new sf::Uint8[4 * numPixels];
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        for (int j = 0; j < WIDTH; j++)
-        {
-            pixels[i * WIDTH * 4 + j * 4] = colors[i][j].x;
-            pixels[4 * (i * WIDTH + j) + 1] = colors[i][j].y;
-            pixels[4 * (i * WIDTH + j) + 2] = colors[i][j].z;
-            pixels[4 * (i * WIDTH + j) + 3] = 255;
+    Coordinates* points = nullptr;
+    sf::Uint8* pixels = nullptr;
+
+    memoryAllocateCuda(&pixels, &points);
+    
+    convergenceCuda(&pixels, &points);
+    
+    cudaEvent_t startEvent, stopEvent;
+
+    cudaEventCreate(&startEvent);
+    cudaEventCreate(&stopEvent);
+    float elapsed_time;
 
 
-
-        }
-    }
     sf::Image image;
     image.create(WIDTH, HEIGHT, pixels);
     sf::Texture texture;
@@ -81,7 +67,7 @@ int main() {
     sf::Sprite sprite(texture);
 
     sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "SFML works!");
-
+    bool flag = false;
     while (window.isOpen())
     {
         sf::Event event;
@@ -93,77 +79,84 @@ int main() {
             }
             else if (event.type == sf::Event::KeyPressed)
             {
-                std::cout << "Key Pressed" << event.key.code << std::endl;
+                //std::cout << "Key Pressed" << event.key.code << std::endl;
+                // Move Up
                 if (event.key.code == sf::Keyboard::A)
                 {
                     for (int i = 0; i < HEIGHT; i++)
                     {
                         for (int j = 0; j < WIDTH; j++)
                         {
-                            points[i][j].y -= 10 * SCALE;
+                            points[i * WIDTH + j].y -= 10 * SCALE;
                         }
                     }
                 }
                 else if (event.key.code == sf::Keyboard::S)
                 {
-                    std::cout << "S pressed" << std::endl;
+                    //std::cout << "S pressed" << std::endl;
+                    // Move down
                     for (int i = 0; i < HEIGHT; i++)
                     {
                         for (int j = 0; j < WIDTH; j++)
                         {
-                            points[i][j].y += 10 * SCALE;
+                            points[i * WIDTH + j].y += 10 * SCALE;
                         }
                     }
                 }
                 else if (event.key.code == sf::Keyboard::W)
                 {
-                    std::cout << "W pressed" << std::endl;
+                    //std::cout << "W pressed" << std::endl;
+                    // Zoom in
                     for (int i = 0; i < HEIGHT; i++)
                     {
                         for (int j = 0; j < WIDTH; j++)
                         {
-                            points[i][j].y *= 0.5;
-                            points[i][j].x *= 0.5;
+                            points[i * WIDTH + j].y *= 0.5;
+                            points[i * WIDTH + j].x *= 0.5;
                         }
                     }
                 }
                 else if (event.key.code == sf::Keyboard::D)
                 {
-                    std::cout << "D pressed" << std::endl;
+                    //std::cout << "D pressed" << std::endl;
+                    // Zoom out
                     for (int i = 0; i < HEIGHT; i++)
                     {
                         for (int j = 0; j < WIDTH; j++)
                         {
-                            points[i][j].y *= 2;
-                            points[i][j].x *= 2;
+                            points[i * WIDTH + j].x *= 2;
+                            points[i * WIDTH + j].y *= 2;
                         }
                     }
                 }
-                cudaError_t status = convergenceCuda(colors, points);
-                std::cout << "After function call " << status << std::endl;
-                for (int i = 0; i < HEIGHT; i++)
-                {
-                    for (int j = 0; j < WIDTH; j++)
-                    {
-                        pixels[i * WIDTH * 4 + j * 4] = colors[i][j].x;
-                        pixels[4 * (i * WIDTH + j) + 1] = colors[i][j].y;
-                        pixels[4 * (i * WIDTH + j) + 2] = colors[i][j].z;
-                        pixels[4 * (i * WIDTH + j) + 3] = 255;
-
-
-
-                    }
-                }
+                cudaEventRecord(startEvent, 0);
+                cudaError_t status = convergenceCuda(&pixels, &points);
                 image.create(WIDTH, HEIGHT, pixels);
                 texture.loadFromImage(image);
                 sprite.setTexture(texture);
 
+                cudaEventRecord(stopEvent, 0);
+                cudaEventSynchronize(stopEvent);
+                cudaEventElapsedTime(&elapsed_time, startEvent, stopEvent);
+
+                std::cout << "Update time: " << elapsed_time << std::endl;
+                flag = true;
             }
         }
-
+        cudaEventRecord(startEvent, 0);
         window.clear();
         window.draw(sprite);
         window.display();
+
+        cudaEventRecord(stopEvent, 0);
+        cudaEventSynchronize(stopEvent);
+        cudaEventElapsedTime(&elapsed_time, startEvent, stopEvent);
+        if (flag)
+        {
+            std::cout << "Image draw time: " << elapsed_time << std::endl;
+            flag = false;
+        }
+        
     }
     
 
@@ -183,74 +176,66 @@ int main() {
     }
     */
 
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        delete[] colors[i];
-        delete[] points[i];
-    }
-
-    delete[] colors;
-    delete[] points;
-    delete[] pixels;
+    memoryFreeCuda(&pixels, &points);
 	return 0;
 
 }
 
-
-cudaError_t convergenceCuda(dim3** color, Coordinates** points)
+cudaError_t memoryAllocateCuda(sf::Uint8** colors, Coordinates** points)
 {
-    Coordinates** dev_points;
-    dim3** dev_colors;
     cudaError_t cudaStatus;
-
-    dim3** host_colors = new dim3 * [HEIGHT];
-    Coordinates** host_points = new Coordinates * [HEIGHT];
-
-    cudaStatus = cudaMalloc((void**)&dev_points, sizeof(Coordinates*) * HEIGHT);
-    //std::cout << "Allocating memory for points " << cudaStatus << std::endl;
-    cudaStatus = cudaMalloc((void**)&dev_colors, sizeof(dim3*) * HEIGHT);
-
-    
-    //std::cout << "Allocating memory for colors " << cudaStatus << std::endl;
-    for (int i = 0; i < HEIGHT; i++)
+    cudaStatus = cudaMallocManaged(points, sizeof(Coordinates) * HEIGHT * WIDTH);
+    if (cudaStatus != cudaSuccess)
     {
-        cudaStatus = cudaMalloc((void**)&(host_points[i]), sizeof(Coordinates) * WIDTH);
-        cudaMemcpy(host_points[i], points[i], sizeof(Coordinates) * WIDTH, cudaMemcpyHostToDevice);
-        cudaStatus = cudaMalloc((void**)&(host_colors[i]), sizeof(dim3) * WIDTH);
+        std::cout << "Memory allocation for points failed.\n";
+    }
+    cudaStatus = cudaMallocManaged(colors, sizeof(sf::Uint8) * 4 * HEIGHT * WIDTH);
+    if (cudaStatus != cudaSuccess)
+    {
+        std::cout << "Memory allocation for colors failed.\n";
     }
 
-    //std::cout << "Memory allocated" << std::endl;
-    cudaStatus = cudaMemcpy(dev_points, host_points, HEIGHT * sizeof(Coordinates*), cudaMemcpyHostToDevice);
-    cudaStatus = cudaMemcpy(dev_colors, host_colors, HEIGHT * sizeof(dim3*), cudaMemcpyHostToDevice);
+    // Initial setup 
+    for (int i = 0; i < HEIGHT; i++)
+    {
+        for (int j = 0; j < WIDTH; j++)
+        {
+            (*points)[i * WIDTH + j].x = (j - WIDTH / 2) * SCALE;
+            (*points)[i * WIDTH + j].y = (HEIGHT / 2 - i) * SCALE;
+        }
+    }
 
+    return cudaStatus;
+}
+
+cudaError_t memoryFreeCuda(sf::Uint8** colors, Coordinates** points)
+{
+    cudaError_t cudaStatus;
+    cudaStatus = cudaFree(*colors);
+    if (cudaStatus != cudaSuccess)
+    {
+        std::cout << "Memory freeing for points failed.\n";
+    }
+    cudaStatus = cudaFree(*points);
+    if (cudaStatus != cudaSuccess)
+    {
+        std::cout << "Memory freeing for colors failed.\n";
+    }
+    return cudaStatus;
+}
+cudaError_t convergenceCuda(sf::Uint8** colors, Coordinates **points)
+{
+    
     // Number of threads per block
     //std::cout << "Memory copied from host to device" << std::endl;
     dim3 threadsPerBlock(16, 16);
     dim3 numberOfBlocks(WIDTH / threadsPerBlock.x, HEIGHT / threadsPerBlock.y);
 
-    checkConverergence <<<numberOfBlocks, threadsPerBlock >>> (dev_colors, dev_points);
-    cudaDeviceSynchronize();
+    checkConverergence <<<numberOfBlocks, threadsPerBlock >>> (*colors, *points);
+    cudaError_t cudaStatus = cudaDeviceSynchronize();
 
-    //std::cout << "Computation done" << std::endl;
-
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        cudaMemcpy(color[i], host_colors[i], sizeof(dim3) * WIDTH, cudaMemcpyDeviceToHost);
-    }
-    //cudaStatus = cudaMemcpy2D(color[0], WIDTH * sizeof(dim3),
-     //   dev_colors[0], WIDTH * sizeof(dim3),
-       // WIDTH * sizeof(dim3), HEIGHT,
-        //cudaMemcpyDeviceToHost);
-
-    //std::cout << "Memory copied from device to host" << std::endl;
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        cudaStatus = cudaFree(host_points[i]);
-        cudaStatus = cudaFree(host_colors[i]);
-    }
-    cudaFree(dev_points);
-    cudaFree(dev_colors);
-    //std::cout << "Memory freed" << std::endl;
+    
+   
     return cudaStatus;
 
 }

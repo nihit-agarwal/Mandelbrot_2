@@ -1,7 +1,7 @@
 // Importing Libraries
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include "bitmapCreation.h"
+#include "helper.h"
 #include <fstream>
 #include <SFML/Graphics.hpp>
 #include <thrust/complex.h>

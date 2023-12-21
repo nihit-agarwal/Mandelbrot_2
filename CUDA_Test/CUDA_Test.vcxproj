@@ -95,6 +95,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bitmapCreation.h" />
+    <ClInclude Include="helper.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="interface.cpp" />

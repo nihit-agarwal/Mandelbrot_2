@@ -68,6 +68,7 @@ int main() {
 
     sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "SFML works!");
     bool flag = false;
+    double var_scale = SCALE;
     while (window.isOpen())
     {
         sf::Event event;
@@ -77,72 +78,34 @@ int main() {
             {
                 window.close();
             }
-            else if (event.type == sf::Event::KeyPressed)
+            
+        }
+
+        // Move Down
+        for (int i = 0; i < HEIGHT; i++)
+        {
+            for (int j = 0; j < WIDTH; j++)
             {
-                //std::cout << "Key Pressed" << event.key.code << std::endl;
-                // Move Up
-                if (event.key.code == sf::Keyboard::A)
-                {
-                    for (int i = 0; i < HEIGHT; i++)
-                    {
-                        for (int j = 0; j < WIDTH; j++)
-                        {
-                            points[i * WIDTH + j].y -= 10 * SCALE;
-                        }
-                    }
-                }
-                else if (event.key.code == sf::Keyboard::S)
-                {
-                    //std::cout << "S pressed" << std::endl;
-                    // Move down
-                    for (int i = 0; i < HEIGHT; i++)
-                    {
-                        for (int j = 0; j < WIDTH; j++)
-                        {
-                            points[i * WIDTH + j].y += 10 * SCALE;
-                        }
-                    }
-                }
-                else if (event.key.code == sf::Keyboard::W)
-                {
-                    //std::cout << "W pressed" << std::endl;
-                    // Zoom in
-                    for (int i = 0; i < HEIGHT; i++)
-                    {
-                        for (int j = 0; j < WIDTH; j++)
-                        {
-                            points[i * WIDTH + j].y *= 0.5;
-                            points[i * WIDTH + j].x *= 0.5;
-                        }
-                    }
-                }
-                else if (event.key.code == sf::Keyboard::D)
-                {
-                    //std::cout << "D pressed" << std::endl;
-                    // Zoom out
-                    for (int i = 0; i < HEIGHT; i++)
-                    {
-                        for (int j = 0; j < WIDTH; j++)
-                        {
-                            points[i * WIDTH + j].x *= 2;
-                            points[i * WIDTH + j].y *= 2;
-                        }
-                    }
-                }
-                cudaEventRecord(startEvent, 0);
-                cudaError_t status = convergenceCuda(&pixels, &points);
-                image.create(WIDTH, HEIGHT, pixels);
-                texture.loadFromImage(image);
-                sprite.setTexture(texture);
-
-                cudaEventRecord(stopEvent, 0);
-                cudaEventSynchronize(stopEvent);
-                cudaEventElapsedTime(&elapsed_time, startEvent, stopEvent);
-
-                std::cout << "Update time: " << elapsed_time << std::endl;
-                flag = true;
+                points[i * WIDTH + j].y += 30 * var_scale;
             }
         }
+        // Zoom In
+        var_scale *= 0.99;
+        for (int i = 0; i < HEIGHT; i++)
+        {
+            for (int j = 0; j < WIDTH; j++)
+            {
+                points[i * WIDTH + j].y *= 0.99;
+                points[i * WIDTH + j].x *= 0.99;
+            }
+        }
+
+        cudaError_t status = convergenceCuda(&pixels, &points);
+        image.create(WIDTH, HEIGHT, pixels);
+        texture.loadFromImage(image);
+        sprite.setTexture(texture);
+
+
         cudaEventRecord(startEvent, 0);
         window.clear();
         window.draw(sprite);
